@@ -60,3 +60,59 @@ public function adminLogin(Request $request)
         }
         return $this->sendFailedLoginResponse($request);
     }
+
+
+    public  function showCodeAuthenticationForm()
+    {
+        return view('auth.code_authentication_form');
+    }
+
+    public function verifyCodeAuthentication(Request $request)
+    {
+
+        $this->validate($request, [
+            'auth_code' => 'required',
+        ]);
+
+        $userId = session('user_id');
+        $userName = session('user_name');
+        $userEmail = session('user_email');
+        $userCode = session('user_code');
+
+        // Verificar se o usuário existe
+
+        $user = User::where('id', $userId)
+            ->where('name', $userName)
+            ->where('email', $userEmail)
+            ->first();
+
+        if ($user) {
+
+            // Verificar se o código de autenticação não expirou
+            if ($user->auth_code_expire_at && Carbon::parse($user->auth_code_expire_at)->gt(Carbon::now())) {
+                // Verificar se o código digitado é igual ao que está no banco de dados
+                if ($request->input('auth_code') == $user->auth_code) {
+                    // Autenticar o usuário
+                    Auth::loginUsingId($user->id, true);
+
+                    $permiss = Role::findByName('super admin');
+                    $user->assignRole($permiss);
+
+                    return redirect()->intended('dashboard')->withErrors(['auth_code' => 'Autenticado com sucesso.']);
+
+                } else {
+                    // Código de autenticação inválido
+                   // return redirect()->route('login')->withErrors(['auth_code' => 'Código de autenticação inválido.']);
+                    return back()->withErrors(['auth_code' => 'Código de autenticação inválido.']);
+                }
+            } else {
+                // Código de autenticação expirado
+                //return redirect()->route('login')->withErrors(['auth_code' => 'Código de autenticação expirado.']);
+                return back()->withErrors(['auth_code' => 'Código de autenticação expirado.']);
+            }
+        } else {
+            // Usuário não encontrado
+            return redirect()->route('admin')->withErrors(['auth_code' => 'Usuário não encontrado.']);
+
+        }
+    }
